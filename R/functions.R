@@ -88,7 +88,7 @@ CreateSampleSchedule <- function(prefs_by_course) {
 }
 
 ComputeScheduleScores <- function(schedule) {
-	schedule_scores <- data.frame(TotalPref = sum(as.numeric(schedule$Preference)), WorstPref=min(as.numeric(schedule$Preference)), BestPref=max(as.numeric(schedule$Preference)), TotalPrime = sum(grepl("PRIME", schedule$Time)), TotalNonPrime = sum(!grepl("PRIME", schedule$Time)))
+	schedule_scores <- data.frame(TotalPref = sum(as.numeric(schedule$Preference)), TotalPrefSquared = sum((as.numeric(schedule$Preference))^2), WorstPref=min(as.numeric(schedule$Preference)), BestPref=max(as.numeric(schedule$Preference)), TotalPrime = sum(grepl("PRIME", schedule$Time)), TotalNonPrime = sum(!grepl("PRIME", schedule$Time)))
 	schedule_scores$ProportionPrime <- schedule_scores$TotalPrime / (schedule_scores$TotalPrime + schedule_scores$TotalNonPrime)
 	schedule400s <- schedule[grepl("EEB4", schedule$CourseNumber),]
 	schedule_scores$Max400Overlap <- max(table(schedule400s$Time))
