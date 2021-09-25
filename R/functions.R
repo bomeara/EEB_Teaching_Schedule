@@ -76,7 +76,7 @@ CreateSampleSchedule <- function(prefs_by_course) {
 				all_available <- rbind(all_available, local_available)
 			}
 		}
-		chosen_best <- as.numeric(all_available[sample.int(nrow(all_available), size=1, prob=weights^2),])
+		chosen_best <- as.numeric(all_available[sample.int(nrow(all_available), size=1, prob=weights),])
 		local_schedule <- data.frame(Instructor=prefs_by_course$'Your name'[chosen_best[1]], CourseNumber=prefs_by_course$CourseNumber[chosen_best[1]], Time=colnames(prefs_by_course)[chosen_best[2]], Email=prefs_by_course$'Your email address'[chosen_best[1]], Preference=prefs_by_course[chosen_best[1], chosen_best[2]])
 		if(nrow(schedule) == 0) { schedule <- local_schedule } else { schedule <- rbind(schedule, local_schedule) } 
 		other_instructor_courses <- which(prefs_by_course$'Your name' == prefs_by_course$'Your name'[chosen_best[1]])
@@ -93,7 +93,7 @@ CreateSampleSchedule <- function(prefs_by_course) {
 }
 
 ComputeScheduleScores <- function(schedule) {
-	schedule_scores <- data.frame(TotalPref = sum(as.numeric(schedule$Preference)), TotalPrefSquared = sum((as.numeric(schedule$Preference))^2), WorstPref=min(as.numeric(schedule$Preference)), BestPref=max(as.numeric(schedule$Preference)), TotalPrime = sum(grepl("PRIME", schedule$Time)), TotalNonPrime = sum(!grepl("PRIME", schedule$Time)))
+	schedule_scores <- data.frame(TotalPref = sum(as.numeric(schedule$Preference)), TotalPrefSqRt = sum((as.numeric(schedule$Preference))^0.5), WorstPref=min(as.numeric(schedule$Preference)), BestPref=max(as.numeric(schedule$Preference)), TotalPrime = sum(grepl("PRIME", schedule$Time)), TotalNonPrime = sum(!grepl("PRIME", schedule$Time)))
 	schedule_scores$ProportionPrime <- schedule_scores$TotalPrime / (schedule_scores$TotalPrime + schedule_scores$TotalNonPrime)
 	schedule400s <- schedule[grepl("EEB4", schedule$CourseNumber),]
 	schedule_scores$Max400Overlap <- max(table(schedule400s$Time))
@@ -114,8 +114,9 @@ ComputeManySchedules <- function(prefs_by_course, nrep=20, maximum_proportion_pr
 			scores <- rbind(scores, scores_local)
 		}
 	}
-	schedules <- schedules[order(scores$TotalPref, decreasing=TRUE)]
-	scores <- scores[order(scores$TotalPref, decreasing=TRUE),]
+	preferred_order <- order(scores$TotalPrefSqRt, decreasing=TRUE)
+	schedules <- schedules[preferred_order]
+	scores <- scores[preferred_order,]
 	scores$scheduleName <- paste("S_", 1:nrow(scores), sep="")
 	names(schedules) <- scores$scheduleName
 	return(list(schedules=schedules, scores=scores))
