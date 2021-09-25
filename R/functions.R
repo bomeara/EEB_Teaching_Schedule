@@ -65,7 +65,6 @@ multi.which <- function(A){
 }
 
 CreateSampleSchedule <- function(prefs_by_course) {
-	ExpandByCourse(instructor_prefs) -> prefs_by_course
 	schedule <- data.frame()
 	while(nrow(prefs_by_course) > 0) {
 		weights <- c()
@@ -84,6 +83,12 @@ CreateSampleSchedule <- function(prefs_by_course) {
 		prefs_by_course[other_instructor_courses, chosen_best[2]] <- 0
 		prefs_by_course <- prefs_by_course[-chosen_best[1],]
 	}
+	schedule$PreferenceVerbal <- ""
+	schedule$Time <- gsub("TIME ", "", schedule$Time)
+	schedule$PreferenceVerbal[which(schedule$Preference == 4)] <- "Ideal"
+	schedule$PreferenceVerbal[which(schedule$Preference == 3)] <- "Preferred"
+	schedule$PreferenceVerbal[which(schedule$Preference == 2)] <- "Feasible"
+	schedule$PreferenceVerbal[which(schedule$Preference == 1)] <- "Unwelcome but feasible"
 	return(schedule)
 }
 
@@ -93,7 +98,36 @@ ComputeScheduleScores <- function(schedule) {
 	schedule400s <- schedule[grepl("EEB4", schedule$CourseNumber),]
 	schedule_scores$Max400Overlap <- max(table(schedule400s$Time))
 	schedule_scores$MaxAnyOverlap <- max(table(schedule$Time))
-	times <- sort(table(schedule$Time), decreasing=TRUE)
+	times <- gsub("TIME ", "", sort(table(schedule$Time), decreasing=TRUE))
 	schedule_scores$MostCommonTime <- names(times)[1]
 	return(schedule_scores)
+}
+
+ComputeManySchedules <- function(prefs_by_course, nrep=20, maximum_proportion_prime=0.7) {
+	schedules <- list()
+	scores <- data.frame()
+	while(length(schedules) < nrep) {
+		schedule <- CreateSampleSchedule(prefs_by_course)
+		scores_local <- ComputeScheduleScores(schedule)
+		if(scores_local$ProportionPrime <= maximum_proportion_prime) {
+			schedules[[length(schedules)+1]] <- schedule
+			scores <- rbind(scores, scores_local)
+		}
+	}
+	schedules <- schedules[order(scores$TotalPref, decreasing=TRUE)]
+	scores <- scores[order(scores$TotalPref, decreasing=TRUE),]
+	scores$scheduleName <- paste("S_", 1:nrow(scores), sep="")
+	names(schedules) <- scores$scheduleName
+	return(list(schedules=schedules, scores=scores))
+}
+
+ExportManySchedules <- function(many_schedules, instructor_prefs, filename) {
+	all_df <- c(list(instructor_prefs, many_schedules$scores), many_schedules$schedules)
+	names(all_df) <- c("original", "scores", names(many_schedules$schedules))
+	wb <- openxlsx::write.xlsx(all_df, file=filename, overwrite=TRUE)
+	for(i in sequence(length(all_df))) {
+		setColWidths(wb, sheet = i, cols = sequence(ncol(all_df[[i]])), widths = "auto")
+	}
+	saveWorkbook(wb, filename, overwrite = TRUE)
+	return(filename)
 }
