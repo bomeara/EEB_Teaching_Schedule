@@ -1,6 +1,6 @@
 library(targets)
 
-source("R/functions.R")
+source("functions.R")
 source("_packages.R")
 options(timeout=1200) # let things download for at least 20 minutes
 options(download.file.method = "libcurl")
