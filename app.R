@@ -6,16 +6,21 @@ library(shinybusy)
 
 source("functions.R")
 
+utk_processed<- ProcessUTKRaw()
+departments <- sort(unique(utk_processed$Subject.Description))
+
+
 ui <- fluidPage(
   use_busy_spinner(spin = "fading-circle"),
   sidebarLayout(
     sidebarPanel(
 		textInput('prefixes', 'Enter prefixes for your courses (comma delimited, no spaces)', "EEB,BIO"),
+		selectInput('department', 'Select a department', departments, "Ecology/Evolutionary Biology"),
       fileInput("file1", "Choose XLSX File",
         accept = c(
           ".xlsx")
         ),
-		p("It may take  few moments to run the analysis after first uploading."),
+		p("It may take up to a couple of minutes to run the analysis after first uploading."),
 	   downloadButton("downloadData", "Download sample schedules"),
 		br(),
 		hr(),
@@ -65,10 +70,13 @@ server <- function(input, output) {
 		inFile <- input$file1
 		prefs_df <- as.data.frame(readxl::read_xlsx(inFile$datapath, .name_repair="minimal", col_types="text"))
 		raw_instructor_prefs <<- GetInstructorPreferencesFromDF(prefs_df)
-		instructor_prefs <- ConvertPrefsToScores(raw_instructor_prefs, min_pref=input$min_pref)
+		instructor_prefs <- FilterUnavailableInstructors(ConvertPrefsToScores(raw_instructor_prefs, min_pref=input$min_pref))
 		prefs_by_course <- ExpandByCourse(instructor_prefs, prefixes=strsplit(toupper(gsub(" ", "",input$prefixes)), ",")[[1]])
 		student_time_prefs <- GetOverallStudentTimePrefs(prefs_by_course)
-		many_schedules <<- ComputeManySchedules(prefs_by_course, student_time_prefs, maximum_proportion_prime=input$threshold, nrep=as.numeric(input$num_to_try))
+		dept_classes_2021 <- FilterForSubject(utk_processed, input$department)
+		course_time_similarity <- FindSimilarityToPreviousCourses(prefs_by_course, dept_classes_2021)
+
+		many_schedules <<- ComputeManySchedules(prefs_by_course, student_time_prefs,course_time_similarity, maximum_proportion_prime=input$threshold, nrep=as.numeric(input$num_to_try))
 		simple <- many_schedules$simple_score 
 		colnames(simple) <- gsub("_", " ", colnames(simple))
 		simple

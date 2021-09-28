@@ -13,6 +13,7 @@ list(
  tar_target(student_time_prefs, GetOverallStudentTimePrefs(prefs_by_course)),
  tar_target(utk_processed, ProcessUTKRaw()),
  tar_target(dept_classes_2021, FilterForSubject(utk_processed, "Ecology/Evolutionary Biology")),
- tar_target(many_schedules, ComputeManySchedules(prefs_by_course, student_time_prefs)),
+ tar_target(course_time_similarity, FindSimilarityToPreviousCourses(prefs_by_course, dept_classes_2021)),
+ tar_target(many_schedules, ComputeManySchedules(prefs_by_course, student_time_prefs, course_time_similarity)),
  tar_target(export_runs, ExportManySchedules(many_schedules, raw_instructor_prefs, filename="SpringSchedule.xlsx"), format="file")
 )

@@ -131,29 +131,41 @@ GetOverallStudentTimePrefs <- function(prefs_by_course) {
 }
 
 
-CreateSampleSchedule <- function(prefs_by_course, student_time_prefs) {
-
+CreateSampleSchedule <- function(prefs_by_course, student_time_prefs, course_time_similarity, maximum_allowed_time_shift=23.9) {
+	previous_schedule_emphasis <- runif(1, 1, 4)
 	schedule <- data.frame()
 	while(nrow(prefs_by_course) > 0) {
-		weights <- c()
+		pref_weights <- c()
 		all_available <- data.frame()
 		for(preference in seq(4, 1, -1)) {
 			local_available <- multi.which(prefs_by_course == preference)
 			if(!is.null(local_available)) {
-				weights <- c(weights, rep(preference, nrow(local_available)))
+				pref_weights <- c(pref_weights, rep(preference, nrow(local_available)))
 				all_available <- rbind(all_available, local_available)
 			}
 		}
+		time_differences <- rep(NA, nrow(all_available))
+		for (i in sequence(nrow(all_available))) {
+			time_differences[i] <- as.numeric(course_time_similarity[all_available[i,1], all_available[i,2]])
+		}
+		sample_probabilities <- (pref_weights/(time_differences+1))^previous_schedule_emphasis
+		sample_probabilities <- sample_probabilities/max(sample_probabilities)
 		if(nrow(all_available) == 0) {
 			stop("Schedule not feasible with current parameters")	
 		}
-		chosen_best <- as.numeric(all_available[sample.int(nrow(all_available), size=1, prob=weights),])
-		local_schedule <- data.frame(Instructor=prefs_by_course$'Your name'[chosen_best[1]], CourseNumber=prefs_by_course$CourseNumber[chosen_best[1]], Time=colnames(prefs_by_course)[chosen_best[2]], Preference=prefs_by_course[chosen_best[1], chosen_best[2]])
+		chosen_best <- as.numeric(all_available[sample.int(nrow(all_available), size=1, prob=sample_probabilities),]) #idea here is to bias the samples towards courses with the same time
+		ntries <- 1
+		while(course_time_similarity[chosen_best[1], chosen_best[2]]>maximum_allowed_time_shift && ntries < 10) {
+			chosen_best <- as.numeric(all_available[sample.int(nrow(all_available), size=1, prob=sample_probabilities),])
+			ntries <- ntries+1	
+		}
+		local_schedule <- data.frame(Instructor=prefs_by_course$'Your name'[chosen_best[1]], CourseNumber=prefs_by_course$CourseNumber[chosen_best[1]], Time=colnames(prefs_by_course)[chosen_best[2]], LastYearSchedule=course_time_similarity$PreviousDateTime[chosen_best[1]], TimeDifference=round(course_time_similarity[chosen_best[1], chosen_best[2]],1), Preference=prefs_by_course[chosen_best[1], chosen_best[2]])
 		try(local_schedule$Email <- prefs_by_course$'Your email address'[chosen_best[1]])
 		if(nrow(schedule) == 0) { schedule <- local_schedule } else { schedule <- rbind(schedule, local_schedule) } 
 		other_instructor_courses <- which(prefs_by_course$'Your name' == prefs_by_course$'Your name'[chosen_best[1]])
 		prefs_by_course[other_instructor_courses, chosen_best[2]] <- 0
 		prefs_by_course <- prefs_by_course[-chosen_best[1],]
+		course_time_similarity <- course_time_similarity[-chosen_best[1],]
 		#print(schedule)
 	}
 	schedule$PreferenceVerbal <- ""
@@ -168,7 +180,19 @@ CreateSampleSchedule <- function(prefs_by_course, student_time_prefs) {
 }
 
 ComputeScheduleScores <- function(schedule, student_time_prefs) {
-	schedule_scores <- data.frame(InstructorPref = mean(as.numeric(schedule$Preference)), StudentPref=mean(2+as.numeric(schedule$StudentLikertPreference)), WorstInstructorPref=min(as.numeric(schedule$Preference)), BestInstructorPref=max(as.numeric(schedule$Preference)), WorstStudentPref=min(2+as.numeric(schedule$StudentLikertPreference)), BestStudentPref=max(2+as.numeric(schedule$StudentLikertPreference)), TotalPrime = sum(grepl("PRIME", schedule$Time)), TotalNonPrime = sum(!grepl("PRIME", schedule$Time)))
+	schedule_scores <- data.frame(
+		InstructorPref = mean(as.numeric(schedule$Preference)), 
+		StudentPref=mean(2+as.numeric(schedule$StudentLikertPreference)), 
+		WorstInstructorPref=min(as.numeric(schedule$Preference)), 
+		BestInstructorPref=max(as.numeric(schedule$Preference)), 
+		WorstStudentPref=min(2+as.numeric(schedule$StudentLikertPreference)), 
+		BestStudentPref=max(2+as.numeric(schedule$StudentLikertPreference)), 
+		TotalPrime = sum(grepl("PRIME", schedule$Time)), 
+		TotalNonPrime = sum(!grepl("PRIME", schedule$Time)),
+		BiggestTimeShift = round(max(as.numeric(schedule$TimeDifference)),1),
+		MedianTimeShift = round(median(as.numeric(schedule$TimeDifference)),1),
+		MeanTimeShift = round(mean(as.numeric(schedule$TimeDifference)),1)
+	)
 	schedule_scores$ProportionPrime <- schedule_scores$TotalPrime / (schedule_scores$TotalPrime + schedule_scores$TotalNonPrime)
 	schedule_scores$MaxAnyOverlap <- max(table(schedule$Time))
 	schedule_scores$StudentAveragePref <- mean(student_time_prefs[schedule$Time])
@@ -186,20 +210,20 @@ ComputeScheduleScores <- function(schedule, student_time_prefs) {
 	return(schedule_scores)
 }
 
-ComputeManySchedules <- function(prefs_by_course, student_time_prefs, nrep=50, maximum_proportion_prime=0.7) {
+ComputeManySchedules <- function(prefs_by_course, student_time_prefs, course_time_similarity, nrep=50, maximum_proportion_prime=0.7, maximum_allowed_time_shift=23.9) {
 	schedules <- list()
 	scores <- data.frame()
 	while(length(schedules) < nrep) {
-		schedule <- CreateSampleSchedule(prefs_by_course, student_time_prefs)
+		schedule <- CreateSampleSchedule(prefs_by_course, student_time_prefs, course_time_similarity, maximum_allowed_time_shift=maximum_allowed_time_shift)
 		scores_local <- ComputeScheduleScores(schedule, student_time_prefs)
-		if(scores_local$ProportionPrime <= maximum_proportion_prime) {
+		if(scores_local$ProportionPrime <= maximum_proportion_prime & scores_local$BiggestTimeShift < maximum_allowed_time_shift) {
 			schedule$Preference <- NULL
 			colnames(schedule) <- gsub("PreferenceVerbal", "Instructor_Preference", colnames(schedule))
 			schedules[[length(schedules)+1]] <- schedule
 			scores <- rbind(scores, scores_local)
 		}
 	}
-	preferred_order <- order(scores$StudentAndInstructorPercentPositive, decreasing=TRUE)
+	preferred_order <- order(scores$MeanTimeShift, scores$StudentAndInstructorPercentPositive, decreasing=c(FALSE, TRUE))
 	schedules <- schedules[preferred_order]
 	scores <- scores[preferred_order,]
 	scores$scheduleName <- paste("S_", 1:nrow(scores), sep="")
@@ -215,7 +239,8 @@ SimplifyScores <- function(scores) {
 		Percent_Happy_Students = scores$StudentPercentWantToEnroll,
 		Percent_Prime_Courses = 100*scores$ProportionPrime,
 		Worst_Number_Overlapping_Courses = scores$MaxAnyOverlap,
-		Number_Of_Instructors_With_Unwelcome_Schedule = scores$NumberOfInstructorsWithUnwelcomeSchedule
+		Number_Of_Instructors_With_Unwelcome_Schedule = scores$NumberOfInstructorsWithUnwelcomeSchedule,
+		Biggest_Shift_In_Times = round(scores$BiggestTimeShift,1)
 	)
 	return(scores_simplified)
 }
@@ -238,7 +263,7 @@ ProcessUTKRaw <- function() {
 	utk$Time <- gsub("SMTWTFS", "", gsub(" Type", "", stringr::str_extract(utk$Meeting.Times, "SMTWTFS.*? Type")))
 	splittimes <- strsplit(utk$Time, " - ")
 	utk$StartTime <- tolower(gsub("  *", " ", unlist(lapply(splittimes, "[", 1))))
-	utk$EndTime <- tolower(gsub("  *", "", unlist(lapply(splittimes, "[", 2))))
+	utk$EndTime <- tolower(gsub("  *", " ", unlist(lapply(splittimes, "[", 2))))
 	utk$Instructor <- gsub("\\(.*\\)", "", utk$Instructor)
 	utk$Instructor <- stringr::str_trim(utk$Instructor)
 	utk$Subject.Description <- stringr::str_trim(utk$Subject.Description)
@@ -257,4 +282,66 @@ ProcessUTKRaw <- function() {
 
 FilterForSubject <- function(utk, subject="Ecology/Evolutionary Biology") {
 	return(subset(utk, utk$Subject.Description==subject))
+}
+
+#returns how many hours different from Spring 2021 (numbers go from zero to positive). A shift between days starts with 24 and gets worse from there.
+FindSimilarityToPreviousCourses <- function(prefs_by_course, dept_classes_2021) {
+	time_conversion_table <- GetConversionTo24HourTimeTable()
+	similarity_to_last_year <- prefs_by_course
+	similarity_to_last_year$PreviousDateTime <- "Unknown"
+	TIME_columns <- which(grepl("TIME", colnames(similarity_to_last_year)))
+	MWF_columns <- which(grepl("TIME MWF", colnames(similarity_to_last_year)))
+	TR_columns <- which(grepl("TIME TR", colnames(similarity_to_last_year)))
+	for (i in sequence(ncol(similarity_to_last_year))) {
+		if(grepl("TIME", colnames(similarity_to_last_year)[i])) {
+			similarity_to_last_year[,i] <- 0	
+		}
+	}
+	
+	for(row_index in sequence(nrow(similarity_to_last_year))) {
+		matching_courses <- subset(dept_classes_2021, grepl(stringr::str_extract( similarity_to_last_year$CourseNumber[row_index], "\\d\\d\\d+"), dept_classes_2021$Course.Number))
+		if(nrow(matching_courses)>0) {
+			matching_course <- matching_courses[which.min(adist(matching_courses$Instructor, similarity_to_last_year$'Your name'[row_index], ignore.case=TRUE)),]
+			dayformat <- matching_course$DayFormat
+			if(dayformat=="MWF") {
+				similarity_to_last_year[row_index,TR_columns] <- 24
+			}
+			if(dayformat=="TR") {
+				similarity_to_last_year[row_index,MWF_columns] <- 24
+			}
+			twentyfourtime_raw <- as.numeric(strsplit(gsub(" [ap]m", "", matching_course$StartTime), ":")[[1]])
+			twentyfourtime <- twentyfourtime_raw[1] + twentyfourtime_raw[2]/60
+			if(grepl("pm", matching_course$StartTime)) {
+				twentyfourtime <- twentyfourtime + 12
+			}
+			for (time_col_index in seq_along(TIME_columns)) {
+				chosen_col <- TIME_columns[time_col_index]
+				timediff <- abs(twentyfourtime - time_conversion_table$TwentyFourHourTime[which(time_conversion_table$column_name==colnames(similarity_to_last_year)[chosen_col])])
+				similarity_to_last_year[row_index, chosen_col] <- similarity_to_last_year[row_index, chosen_col] + timediff
+				if(twentyfourtime_raw[1]==0) { #it's one of the 12 am  classes
+					similarity_to_last_year[row_index, chosen_col] <- 0
+				}
+			}
+			similarity_to_last_year$PreviousDateTime[row_index] <- gsub("Monday", "M", gsub("Tuesday", "T", gsub("Wednesday", "W", (gsub("Thursday", "R", gsub("Friday", "F", gsub(",", "", gsub("  *", " ", paste0(matching_course$Day, " ", matching_course$Time)))))))))
+		}
+	}
+	return(similarity_to_last_year)
+}
+
+GetConversionTo24HourTimeTable <- function() {
+	
+	return(data.frame(column_name = c("TIME MWF 8:00-8:50 am", "TIME MWF 2:15-3:05 pm", 
+	"TIME MWF 3:30-4:20 pm", "TIME MWF 4:45-5:35 pm", "TIME MWF 6:00-6:50 pm", 
+	"TIME MWF 7:15-8:05 pm", "TIME TR 8:10-9:25 am", "TIME TR 2:50-4:05 pm", 
+	"TIME TR 4:30-5:45 pm", "TIME TR 6:10-7:25 pm", "TIME TR 7:50-9:05 pm", 
+	"TIME MWF 9:15-10:05 am PRIME", "TIME MWF 10:30-11:20 am PRIME", 
+	"TIME MWF 11:45 am-12:35 pm PRIME", "TIME MWF 1:00-1:50 pm PRIME", 
+	"TIME TR 9:50-11:05 am PRIME", "TIME TR 11:30 am-12:45 pm PRIME", 
+	"TIME TR 1:10-2:25 pm PRIME"), TwentyFourHourTime = c(8, 14.25, 
+	15.5, 16.75, 18,19.25, 8.17, 14.83, 
+	16.5, 18.17, 19.83, 
+	9.25, 10.5, 
+	11.75, 13, 
+	9.83, 11.5, 
+	13.16)))
 }
