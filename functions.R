@@ -13,6 +13,19 @@ GetInstructorPreferencesFromDF <- function(prefs) {
  return(prefs)
 }
 
+FilterUnavailableInstructors <- function(instructor_prefs) {
+	prefs_times <- instructor_prefs[,grepl("TIME", colnames(instructor_prefs))]
+	for (i in sequence(ncol(prefs_times))) {
+		prefs_times[,i] <- as.numeric(prefs_times[,i])
+	}
+	sums <- rowSums(prefs_times)
+	if(any(sums == 0)) { 
+		print(paste("Warning: instructor(s) ", paste(instructor_prefs$'Your name'[sums==0], collapse=", "), " have entered no available times.", sep=""))	
+	}
+	instructor_prefs <- instructor_prefs[sums > 0,]
+	return(instructor_prefs)
+}
+
 GetStudentPreferences <- function(sheet_code="1CvqokuJlTB97VvgkUm8IAhEOTXiFcP8r-UHK2DkYPeA") {
 	studentprefs <- as.data.frame(googlesheets4::read_sheet(sheet_code, col_types="c"), stringsAsFactors=FALSE)
 	studentprefs[studentprefs == "Strongly disagree"] <- -2
@@ -141,6 +154,7 @@ CreateSampleSchedule <- function(prefs_by_course, student_time_prefs) {
 		other_instructor_courses <- which(prefs_by_course$'Your name' == prefs_by_course$'Your name'[chosen_best[1]])
 		prefs_by_course[other_instructor_courses, chosen_best[2]] <- 0
 		prefs_by_course <- prefs_by_course[-chosen_best[1],]
+		#print(schedule)
 	}
 	schedule$PreferenceVerbal <- ""
 	schedule$Time <- gsub("TIME ", "", schedule$Time)
@@ -215,4 +229,32 @@ ExportManySchedules <- function(many_schedules, instructor_prefs, filename, numb
 	}
 	saveWorkbook(wb, filename, overwrite = TRUE)
 	return(filename)
+}
+
+ProcessUTKRaw <- function() {
+	utk <- read.csv("data/UTK_Classes_Spring_2021_raw.csv", header=TRUE, stringsAsFactors=FALSE)	
+	utk <- subset(utk, nchar(utk$Title)>1)
+	utk$Day <- gsub(":.*", "", gsub("\\d", "", gsub("SMTWTFS","", stringr::str_extract(utk$Meeting.Times, ".*SMTWTFS\\d"))))
+	utk$Time <- gsub("SMTWTFS", "", gsub(" Type", "", stringr::str_extract(utk$Meeting.Times, "SMTWTFS.*? Type")))
+	splittimes <- strsplit(utk$Time, " - ")
+	utk$StartTime <- tolower(gsub("  *", " ", unlist(lapply(splittimes, "[", 1))))
+	utk$EndTime <- tolower(gsub("  *", "", unlist(lapply(splittimes, "[", 2))))
+	utk$Instructor <- gsub("\\(.*\\)", "", utk$Instructor)
+	utk$Instructor <- stringr::str_trim(utk$Instructor)
+	utk$Subject.Description <- stringr::str_trim(utk$Subject.Description)
+	utk$Course.Number <- stringr::str_trim(utk$Course.Number)
+	utk$Instructor[nchar(utk$Instructor)==0] <- " "
+	utk$InstructorLastName <- humaniformat::last_name(utk$Instructor)
+	utk$InstructorFirstName <- humaniformat::first_name(utk$Instructor)
+	utk$DayFormat <- "None"
+	utk$DayFormat[grepl("Tuesday", utk$Day)] <- "TR" # doesn't handle weird cases like every day classes, but those are rare
+	utk$DayFormat[grepl("Thursday", utk$Day)] <- "TR"
+	utk$DayFormat[grepl("Wednesday", utk$Day)] <- "MWF"
+	utk$DayFormat[grepl("Monday", utk$Day)] <- "MWF"
+	utk$DayFormat[grepl("Friday", utk$Day)] <- "MWF"
+	return(utk)
+}
+
+FilterForSubject <- function(utk, subject="Ecology/Evolutionary Biology") {
+	return(subset(utk, utk$Subject.Description==subject))
 }
