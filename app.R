@@ -53,9 +53,9 @@ server <- function(input, output) {
       "SampleSchedule.xlsx"
     },
     content = function(file) {
-		
  		ExportManySchedules(many_schedules, raw_instructor_prefs, filename=file, number_to_export=as.numeric(input$num_to_export))
-    }
+    },
+	contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   )
   output$contents <- renderTable({
     # input$file1 will be NULL initially. After the user selects
