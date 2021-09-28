@@ -10,15 +10,19 @@ ui <- fluidPage(
   use_busy_spinner(spin = "fading-circle"),
   sidebarLayout(
     sidebarPanel(
+		textInput('prefixes', 'Enter prefixes for your courses (comma delimited, no spaces)', "EEB,BIO"),
       fileInput("file1", "Choose XLSX File",
         accept = c(
           ".xlsx")
         ),
-	  textInput('prefixes', 'Enter prefixes for your courses (comma delimited, no spaces)', "EEB,BIO"),
-	  p("This will generate many potential schedules, some much better than others. The more you try, the better they may be, but this app may run more slowly. You can choose to save only the best ones."),
-	  textInput('num_to_try', 'How many schedules to try making', 100),
+		p("It may take  few moments to run the analysis after first uploading."),
+	   downloadButton("downloadData", "Download sample schedules"),
+		br(),
+		hr(),
+	  p("This will generate many potential schedules, some much better than others. The more you try, the better they may be, but this app may run more slowly. You can choose to save only the best ones. The initial number is low for speed."),
+	  textInput('num_to_try', 'How many schedules to try making', 40),
 	  textInput('num_to_export', 'How many of the best schedules to export', 20),
-	  p("The app automatically does not assign instructors to times that are not possible for them. However, there may be schedules that only have times instructors actually like. You can try running this with the 'Feasible' or 'Preferred' settings. If there are no such possible schedules, you will see an error -- just choose a different setting and it will run again."),
+	  p("The app automatically avoids unavailable times for instructors, but allows unwelcome times. There may be schedules that only have times instructors actually like. You can try running this with the 'Feasible' or 'Preferred' settings. If there are no such possible schedules, you will see an error -- just choose a different setting and it will run again."),
 radioButtons("min_pref", "Instructors will only be assigned courses that meet at least this level of preference:",
 		c("Unwelcome but feasible" = 1,
 			"Feasible" = 2,
@@ -29,12 +33,8 @@ radioButtons("min_pref", "Instructors will only be assigned courses that meet at
                   label = "Maximum percentage of courses offered during 'prime time':",
                   min = 40,
                   max = 70,
-                  value = 60),
+                  value = 60)
 	
-
-      tags$hr(),
-	   downloadButton("downloadData", "Download sample schedules"),
-
 ),
     mainPanel(
       tableOutput("contents")

@@ -135,7 +135,8 @@ CreateSampleSchedule <- function(prefs_by_course, student_time_prefs) {
 			stop("Schedule not feasible with current parameters")	
 		}
 		chosen_best <- as.numeric(all_available[sample.int(nrow(all_available), size=1, prob=weights),])
-		local_schedule <- data.frame(Instructor=prefs_by_course$'Your name'[chosen_best[1]], CourseNumber=prefs_by_course$CourseNumber[chosen_best[1]], Time=colnames(prefs_by_course)[chosen_best[2]], Email=prefs_by_course$'Your email address'[chosen_best[1]], Preference=prefs_by_course[chosen_best[1], chosen_best[2]])
+		local_schedule <- data.frame(Instructor=prefs_by_course$'Your name'[chosen_best[1]], CourseNumber=prefs_by_course$CourseNumber[chosen_best[1]], Time=colnames(prefs_by_course)[chosen_best[2]], Preference=prefs_by_course[chosen_best[1], chosen_best[2]])
+		try(local_schedule$Email <- prefs_by_course$'Your email address'[chosen_best[1]])
 		if(nrow(schedule) == 0) { schedule <- local_schedule } else { schedule <- rbind(schedule, local_schedule) } 
 		other_instructor_courses <- which(prefs_by_course$'Your name' == prefs_by_course$'Your name'[chosen_best[1]])
 		prefs_by_course[other_instructor_courses, chosen_best[2]] <- 0

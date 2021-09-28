@@ -12,5 +12,5 @@ list(
  tar_target(prefs_by_course, ExpandByCourse(instructor_prefs)),
  tar_target(student_time_prefs, GetOverallStudentTimePrefs(prefs_by_course)),
  tar_target(many_schedules, ComputeManySchedules(prefs_by_course, student_time_prefs)),
- tar_target(export_runs, ExportManySchedules(many_schedules, raw_instructor_prefs, filename="~/Downloads/SpringSchedule.xlsx"), format="file")
+ tar_target(export_runs, ExportManySchedules(many_schedules, raw_instructor_prefs, filename="SpringSchedule.xlsx"), format="file")
 )
